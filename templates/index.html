@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estoque de O negativo — integral definida</title>
+<style>
+  :root{
+    --paper:#F3F5F4; --panel:#FFFFFF; --ink:#121D1C; --ink-soft:#4B5C5A;
+    --rule:#D2DAD8; --garnet:#8E1B32; --steel:#2E5E6B;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font-family:Georgia,"Times New Roman",serif;line-height:1.6}
+  .wrap{max-width:860px;margin:0 auto;padding:44px 22px 80px}
+  h1{font-family:system-ui,sans-serif;font-size:1.9rem;line-height:1.15;
+     letter-spacing:-.02em;margin:0 0 .4rem}
+  .lede{color:var(--ink-soft);max-width:58ch;margin:0 0 2rem}
+  h2{font-family:system-ui,sans-serif;font-size:1.1rem;margin:2.4rem 0 .8rem;
+     padding-top:1.2rem;border-top:1px solid var(--rule)}
+  .panel{background:var(--panel);border:1px solid var(--rule);padding:20px;margin-bottom:1.6rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.9rem 1.1rem}
+  label{display:block;font-family:system-ui,sans-serif;font-size:.78rem;
+        color:var(--ink-soft);margin-bottom:.25rem}
+  input{width:100%;padding:.48rem .55rem;font:inherit;font-size:.95rem;
+        border:1px solid var(--rule);background:var(--paper);color:var(--ink)}
+  .btns{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
+  button,a.btn{font-family:system-ui,sans-serif;font-size:.88rem;font-weight:600;
+    cursor:pointer;padding:.55rem 1.05rem;border:0;background:var(--ink);
+    color:var(--paper);text-decoration:none;display:inline-block}
+  a.btn{background:transparent;color:var(--ink);border:1px solid var(--rule)}
+  .verdict{font-family:system-ui,sans-serif;font-size:1.7rem;font-weight:700;margin:.2rem 0}
+  .deficit{color:var(--garnet)} .surplus{color:var(--steel)}
+  .sub{color:var(--ink-soft);font-size:.92rem;margin:0}
+  table{width:100%;border-collapse:collapse;font-size:.92rem;margin-top:.6rem}
+  th,td{text-align:left;padding:.5rem .4rem;border-bottom:1px solid var(--rule)}
+  th{font-family:system-ui,sans-serif;font-size:.76rem;color:var(--ink-soft)}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  img{max-width:100%;height:auto;display:block;margin-top:1rem}
+  pre{background:var(--paper);border:1px solid var(--rule);padding:.8rem;
+      overflow-x:auto;font-size:.86rem;margin:.3rem 0 1.2rem}
+  .alerta{background:#FBEAEE;border-left:3px solid var(--garnet);
+          padding:.7rem .9rem;font-size:.9rem;margin-bottom:1.2rem}
+  .ok{color:var(--steel);font-weight:700}
+  .scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Variação do estoque de sangue O negativo</h1>
+  <p class="lede">Doação e consumo são taxas que mudam mês a mês. A integral definida
+  da diferença entre elas devolve de quantas bolsas o estoque cresceu ou encolheu no período.</p>
+
+  {% if erro %}<div class="alerta">{{ erro }}</div>{% endif %}
+
+  <form method="post" class="panel">
+    <div class="grid">
+      <div><label for="a">Coef. angular da doação</label>
+        <input type="number" step="10" id="a" name="a" value="{{ campos.a }}"></div>
+      <div><label for="b">Termo independente</label>
+        <input type="number" step="10" id="b" name="b" value="{{ campos.b }}"></div>
+      <div><label for="t0">Mês inicial</label>
+        <input type="number" step="0.5" min="0" max="6" id="t0" name="t0" value="{{ campos.t0 }}"></div>
+      <div><label for="t1">Mês final</label>
+        <input type="number" step="0.5" min="0" max="6" id="t1" name="t1" value="{{ campos.t1 }}"></div>
+      <div><label for="n">Subintervalos (n)</label>
+        <input type="number" step="2" min="2" id="n" name="n" value="{{ campos.n }}"></div>
+    </div>
+    <div class="btns">
+      <button type="submit">Calcular</button>
+      <a class="btn" href="/?t0=1&amp;t1=2">Fevereiro</a>
+      <a class="btn" href="/?t0=3&amp;t1=4">Abril</a>
+      <a class="btn" href="/">Semestre inteiro</a>
+    </div>
+  </form>
+
+  <div class="panel">
+    <p class="verdict {{ 'surplus' if r.exata >= 0 else 'deficit' }}">
+      {{ '+' if r.exata >= 0 else '−' }}{{ '%.2f'|format(r.exata|abs) }} bolsas
+    </p>
+    <p class="sub">
+      Entrada de {{ '%.1f'|format(r.entrada) }} bolsas contra saída de
+      {{ '%.1f'|format(r.saida) }} no intervalo.
+      {{ 'O estoque cresceu.' if r.exata >= 0 else 'O estoque encolheu.' }}
+    </p>
+    <img src="data:image/png;base64,{{ grafico }}" alt="Retas de doação e consumo no intervalo escolhido.">
+  </div>
+
+  <h2>O consumo, parcela por parcela</h2>
+  <p class="sub">A função de consumo é definida por partes, então a integral se quebra
+  em uma parcela por trecho. A soma das partes é a integral do todo.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Intervalo</th><th>Reta</th><th class="num">Integral</th></tr></thead>
+    <tbody>
+      {% for p in r.parcelas %}
+      <tr><td>{{ p.intervalo }}</td><td>{{ p.funcao }}</td><td class="num">{{ '%.2f'|format(p.valor) }}</td></tr>
+      {% endfor %}
+      <tr><td colspan="2"><strong>Total</strong></td><td class="num"><strong>{{ '%.2f'|format(r.saida) }}</strong></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Continuidade nas junções</h2>
+  <p class="sub">As retas do consumo precisam se encontrar sem salto. Conferir isso é
+  o primeiro passo de verificação do modelo.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Ponto</th><th class="num">Pela esquerda</th><th class="num">Pela direita</th><th>Situação</th></tr></thead>
+    <tbody>
+      {% for ponto, esq, dir in r.continuidade %}
+      <tr><td>t = {{ ponto }}</td><td class="num">{{ esq }}</td><td class="num">{{ dir }}</td>
+        <td>{% if esq == dir %}<span class="ok">contínua</span>{% else %}salto{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Taxa média (Teorema do Valor Médio para Integrais)</h2>
+  <p class="sub">A integral devolve o total acumulado, não a taxa média. A média se obtém
+  dividindo o total pela largura do intervalo — e o teorema garante que existe um instante
+  em que a taxa instantânea coincide com essa média.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th></th><th class="num">Taxa média</th><th>Instante(s) em que bate a média</th></tr></thead>
+    <tbody>
+      <tr><td>Doação</td><td class="num">{{ '%.2f'|format(r.media_doacao) }} bolsas/mês</td>
+        <td>t = {{ '%.2f'|format(r.instante_doacao) }}</td></tr>
+      <tr><td>Consumo</td><td class="num">{{ '%.2f'|format(r.media_consumo) }} bolsas/mês</td>
+        <td>{% for v in r.instantes_consumo %}t = {{ '%.2f'|format(v) }}{% if not loop.last %}, {% endif %}{% else %}nenhum no intervalo{% endfor %}</td></tr>
+      <tr><td><strong>Saldo</strong></td><td class="num"><strong>{{ '%.2f'|format(r.media_saldo) }} bolsas/mês</strong></td><td></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+</div>
+</body>
+</html>
